@@ -7,9 +7,10 @@ from rest_framework import status
 from .serializers import UserSerializer, PostSerializer, LoginSerializer
 import random
 import string
+import uuid
 
 # Simple in-memory session storage
-sessions = set()
+sessions = {}
 
 class UserView(APIView):
     def get(self, request, id):
@@ -34,20 +35,28 @@ class LoginView(APIView):
         serializer = LoginSerializer(data=request.data)
         if serializer.is_valid():
             username = serializer.validated_data["username"]
-            password = serializer.validated_data["password"]
+           # генерируем уникальный session_id
+            session_id = str(uuid.uuid4())
+            sessions[session_id] = username
             # Very simple logic: accept any username/password
-            sessions.add(username)
-            return Response({"message": f"{username} logged in"}, status=status.HTTP_200_OK)
+            #sessions.add(username)
+            return Response({
+                "message": f"{username} logged in",
+                "session_id": session_id
+            }, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class LogoutView(APIView):
     def post(self, request):
-        serializer = LoginSerializer(data=request.data)
-        if serializer.is_valid():
-            username = serializer.validated_data["username"]
-            if username in sessions:
-                sessions.remove(username)
+        # Получаем session_id из заголовка Authorization
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            session_id = auth_header.split(" ")[1]
+            if session_id in sessions:
+                username = sessions.pop(session_id)  # удаляем сессию и получаем username
                 return Response({"message": f"{username} logged out"}, status=status.HTTP_200_OK)
             else:
-                return Response({"error": "user not logged in"}, status=status.HTTP_400_BAD_REQUEST)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"error": "invalid session"}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            return Response({"error": "missing or invalid Authorization header"}, status=status.HTTP_400_BAD_REQUEST)
+

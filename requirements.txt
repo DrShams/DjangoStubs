@@ -1,0 +1,5 @@
+django
+djangorestframework
+grpcio
+google
+protobuf
